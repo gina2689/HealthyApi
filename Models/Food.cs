@@ -13,6 +13,9 @@ namespace HealthyApi.Models
         [Required]
         [Column("name")]
         public string Name { get; set; }
+        
+        [Column("namekr")]
+        public string NameKr { get; set; }
 
         [Column("category")]
         public string? Category { get; set; }

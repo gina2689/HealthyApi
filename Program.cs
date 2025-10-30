@@ -1,7 +1,10 @@
 ﻿using HealthyApi;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using HealthyApi.Helpers;
 using System.IO;
+using Swashbuckle.AspNetCore.SwaggerGen;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +16,6 @@ builder.Services.AddDbContext<DataContext>(options =>
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
     {
-        // Use snake_case for JSON input/output
         o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         o.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower;
     });
@@ -31,7 +33,12 @@ builder.Services.AddCors(options =>
 
 // ===================== Swagger Configuration =====================
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.EnableAnnotations(); //  启用 Swagger 注解
+    c.OperationFilter<FileUploadOperation>(); // 允许上传文件接口显示在 Swagger
+    c.SupportNonNullableReferenceTypes();
+});
 
 var app = builder.Build();
 
@@ -48,27 +55,57 @@ app.MapControllers();
 
 // ===================== Startup Logging =====================
 var logger = app.Logger;
-
-// Read SQLite connection path
 string dbConnection = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=healthy.db";
 string dbFilePath = dbConnection.Replace("Data Source=", "").Trim();
 string fullDbPath = Path.GetFullPath(dbFilePath);
+string urls = app.Urls.Any() ? string.Join(", ", app.Urls) : "http://localhost:5000";
 
-// Determine current running URL
-var urls = app.Urls.Any() ? string.Join(", ", app.Urls) : "http://localhost:5000";
-
-// Log information to console
 logger.LogInformation("HealthyApi service started.");
 logger.LogInformation("API URL: {Urls}", urls);
 logger.LogInformation("Database Path: {DbPath}", fullDbPath);
 logger.LogInformation("Start Time: {Time}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
-// Simple console output
+Console.ForegroundColor = ConsoleColor.Green;
 Console.WriteLine("========================================");
 Console.WriteLine("HealthyApi service started successfully.");
 Console.WriteLine($"API URL: {urls}");
-Console.WriteLine($"Database Path: {fullDbPath}");
+Console.WriteLine($"Database Path: {fullDbPath} (SQLite)");
 Console.WriteLine($"Start Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine("========================================");
+Console.ResetColor();
 
 app.Run();
+
+
+// ===================== Swagger File Upload Support =====================
+public class FileUploadOperation : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var fileParams = context.ApiDescription.ParameterDescriptions
+            .Where(p => p.Type == typeof(IFormFile))
+            .ToList();
+
+        if (fileParams.Count > 0)
+        {
+            operation.RequestBody = new OpenApiRequestBody
+            {
+                Content =
+                {
+                    ["multipart/form-data"] = new OpenApiMediaType
+                    {
+                        Schema = new OpenApiSchema
+                        {
+                            Type = "object",
+                            Properties = fileParams.ToDictionary(
+                                p => p.Name,
+                                p => new OpenApiSchema { Type = "string", Format = "binary" }
+                            ),
+                            Required = fileParams.Select(p => p.Name).ToHashSet()
+                        }
+                    }
+                }
+            };
+        }
+    }
+}
