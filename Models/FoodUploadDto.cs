@@ -1,11 +1,17 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 
 namespace HealthyApi.Models
 {
     public class FoodUploadDto
     {
-        public IFormFile? Image { get; set; }    // 上传的图片
-        public int UserId { get; set; }          // 用户ID
-        public string MealType { get; set; } = ""; // 早餐/午餐/晚餐/加餐
+        [FromForm(Name = "image")]
+        public IFormFile Image { get; set; }
+
+        [FromForm(Name = "user_id")]
+        public int UserId { get; set; }
+
+        [FromForm(Name = "meal_type")]
+        public string? MealType { get; set; } = null;
     }
 }
